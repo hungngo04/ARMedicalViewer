@@ -54,7 +54,7 @@ public class SlicesRenderManager : MonoBehaviour
         {
             string ip = ipAddressInput.text;
             Debug.Log($"IP: {ip}");
-            tcpSender.ConnectToClient(ip, 12345);
+            tcpSender.ConnectToClient(ip, 50001);
             int currentSlice = (int)sliceSlider.value;
             var texture = axialImage.texture as Texture2D;
             tcpSender.SendAxialImage(texture);
