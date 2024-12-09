@@ -24,8 +24,6 @@ public class SlicesRenderManager : MonoBehaviour
     private TextureManager textureManager;
 
     private string[] dicomSlicesList;
-    private List<Texture2D> axialTextures;
-    private Texture3D dicom3DTexture;
     private bool patientInfoLoaded = false;
 
     void Start()
@@ -42,7 +40,8 @@ public class SlicesRenderManager : MonoBehaviour
             sliceSlider.minValue = 0;
             sliceSlider.maxValue = dicomSlicesList.Length - 1;
 
-            Create3DTexture();
+            sliceSlider.onValueChanged.AddListener(OnSliceChanged);
+
             LoadDicomSlice(0);
         }
         else
@@ -57,21 +56,18 @@ public class SlicesRenderManager : MonoBehaviour
             Debug.Log($"IP: {ip}");
             tcpSender.ConnectToClient(ip, 12345);
             int currentSlice = (int)sliceSlider.value;
-            var texture = axialTextures[currentSlice];
+            var texture = axialImage.texture as Texture2D;
             tcpSender.SendAxialImage(texture);
             tcpSender.Disconnect();
         });
     }
 
-    void Update()
+    private void OnSliceChanged(float value)
     {
-        int sliceNumber = (int)sliceSlider.value;
-        sliceNumberText.text = $"Slice Number: {sliceNumber}";
-        LoadDicomSlice(sliceNumber);
+        int sliceIndex = Mathf.RoundToInt(value);
+        sliceNumberText.text = $"Slice Number: {sliceIndex}";
 
-        float slicePos = sliceNumber / (float)(dicomSlicesList.Length - 1);
-        UpdateSagittalSlice(slicePos);
-        UpdateCoronalSlice(slicePos);
+        LoadDicomSlice(sliceIndex);
     }
 
     private void LoadDicomSlice(int sliceIndex)
@@ -97,65 +93,5 @@ public class SlicesRenderManager : MonoBehaviour
 
             uiManager.AssignTextureToRawImage(texture, axialImage);
         }
-    }
-
-    private void Create3DTexture()
-    {
-        int width = 0, height = 0, depth = dicomSlicesList.Length;
-
-        axialTextures = new List<Texture2D>();
-        foreach (var fileName in dicomSlicesList)
-        {
-            var dicomFile = dicomFileManager.LoadDicomFile(fileName);
-            var texture = dicomFileManager.GetDicomTexture(dicomFile);
-
-            if (texture != null)
-            {
-                if (width == 0 && height == 0)
-                {
-                    width = texture.width;
-                    height = texture.height;
-                }
-                axialTextures.Add(texture);
-            }
-        }
-
-        dicom3DTexture = new Texture3D(width, height, depth, TextureFormat.RGBA32, false);
-
-        Color[] voxelColors = new Color[width * height * depth];
-        for (int z = 0; z < depth; z++)
-        {
-            var sliceColors = axialTextures[z].GetPixels();
-            for (int y = 0; y < height; y++)
-            {
-                for (int x = 0; x < width; x++)
-                {
-                    voxelColors[z * width * height + y * width + x] = sliceColors[y * width + x];
-                }
-            }
-        }
-
-        dicom3DTexture.filterMode = FilterMode.Bilinear;
-        dicom3DTexture.wrapMode = TextureWrapMode.Clamp;
-        dicom3DTexture.SetPixels(voxelColors);
-        dicom3DTexture.Apply();
-
-        Debug.Log("3D Texture created successfully.");
-    }
-
-    private void UpdateSagittalSlice(float slicePos)
-    {
-        sliceMaterial.SetTexture("_VolumeTex", dicom3DTexture);
-        sliceMaterial.SetFloat("_SlicePos", slicePos);
-        sliceMaterial.SetVector("_SliceAxis", new Vector3(1, 0, 0)); // Sagittal axis
-        sagittalImage.material = sliceMaterial;
-    }
-
-    private void UpdateCoronalSlice(float slicePos)
-    {
-        sliceMaterial.SetTexture("_VolumeTex", dicom3DTexture);
-        sliceMaterial.SetFloat("_SlicePos", slicePos);
-        sliceMaterial.SetVector("_SliceAxis", new Vector3(0, 1, 0)); // Coronal axis
-        coronalImage.material = sliceMaterial;
     }
 }
