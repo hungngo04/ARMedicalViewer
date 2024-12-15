@@ -26,6 +26,12 @@ public class SlicesRenderManager : MonoBehaviour
     private string[] dicomSlicesList;
     private bool patientInfoLoaded = false;
 
+    private Texture3D volumeTexture;
+    private Color32[] volumePixelData;
+    private int width;
+    private int height;
+    private int depth;
+
     void Start()
     {
         dicomFileManager = new DicomFileManager();
@@ -43,6 +49,8 @@ public class SlicesRenderManager : MonoBehaviour
             sliceSlider.onValueChanged.AddListener(OnSliceChanged);
 
             LoadDicomSlice(0);
+
+            CreateVolumeTexture();
         }
         else
         {
@@ -93,5 +101,48 @@ public class SlicesRenderManager : MonoBehaviour
 
             uiManager.AssignTextureToRawImage(texture, axialImage);
         }
+    }
+
+    private void CreateVolumeTexture()
+    {
+        var firstFile = dicomFileManager.LoadDicomFile(dicomSlicesList[0]);
+        Texture2D firstTexture = dicomFileManager.GetDicomTexture(firstFile);
+        int width = firstTexture.width;
+        int height = firstTexture.height;
+        int depth = dicomSlicesList.Length;
+
+        volumePixelData = new Color32[width * height * depth];
+
+        for (int z = 0; z < depth; z++)
+        {
+            var dicomFile = dicomFileManager.LoadDicomFile(dicomSlicesList[z]);
+            Texture2D sliceTex = dicomFileManager.GetDicomTexture(dicomFile);
+
+            if (sliceTex.width != width || sliceTex.height != height)
+            {
+                sliceTex = textureManager.ResizeTexture(sliceTex, width, height);
+            }
+
+            Color32[] slicePixels = sliceTex.GetPixels32();
+            System.Array.Copy(slicePixels, 0, volumePixelData, z * width * height, width * height);
+        }
+
+        volumeTexture = new Texture3D(width, height, depth, TextureFormat.RGBA32, false);
+        volumeTexture.wrapMode = TextureWrapMode.Clamp;
+        volumeTexture.filterMode = FilterMode.Bilinear;
+
+        volumeTexture.SetPixels32(volumePixelData);
+        volumeTexture.Apply(updateMipmaps: false);
+
+        if (sliceMaterial != null)
+        {
+            sliceMaterial.SetTexture("_VolumeTex", volumeTexture);
+        }
+        else
+        {
+            Debug.LogWarning("No volume rendering material assigned.");
+        }
+
+        Debug.Log("Volume texture created and assigned to the material.");
     }
 }
