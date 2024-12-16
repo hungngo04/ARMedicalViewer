@@ -75,8 +75,8 @@ public class GoalManager : MonoBehaviour
     [SerializeField]
     Toggle m_PassthroughToggle;
 
-    [SerializeField]
-    LazyFollow m_GoalPanelLazyFollow;
+    //[SerializeField]
+    //LazyFollow m_GoalPanelLazyFollow;
 
     [SerializeField]
     GameObject m_TapTooltip;
@@ -196,17 +196,17 @@ public class GoalManager : MonoBehaviour
             switch (m_CurrentGoal.CurrentGoal)
             {
                 case OnboardingGoals.Empty:
-                    m_GoalPanelLazyFollow.positionFollowMode = LazyFollow.PositionFollowMode.Follow;
+                    //m_GoalPanelLazyFollow.positionFollowMode = LazyFollow.PositionFollowMode.Follow;
                     break;
                 case OnboardingGoals.FindSurfaces:
-                    m_GoalPanelLazyFollow.positionFollowMode = LazyFollow.PositionFollowMode.Follow;
+                    //m_GoalPanelLazyFollow.positionFollowMode = LazyFollow.PositionFollowMode.Follow;
                     break;
                 case OnboardingGoals.TapSurface:
                     if (m_TapTooltip != null)
                     {
                         m_TapTooltip.SetActive(true);
                     }
-                    m_GoalPanelLazyFollow.positionFollowMode = LazyFollow.PositionFollowMode.None;
+                    //m_GoalPanelLazyFollow.positionFollowMode = LazyFollow.PositionFollowMode.None;
                     break;
             }
         }
@@ -370,7 +370,7 @@ public class GoalManager : MonoBehaviour
         if (m_CurrentGoal.CurrentGoal == OnboardingGoals.TapSurface && m_SurfacesTapped >= k_NumberOfSurfacesTappedToCompleteGoal)
         {
             CompleteGoal();
-            m_GoalPanelLazyFollow.positionFollowMode = LazyFollow.PositionFollowMode.Follow;
+            //m_GoalPanelLazyFollow.positionFollowMode = LazyFollow.PositionFollowMode.Follow;
         }
     }
 

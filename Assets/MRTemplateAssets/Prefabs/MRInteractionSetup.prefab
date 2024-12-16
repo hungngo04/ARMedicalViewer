@@ -575,7 +575,6 @@ MonoBehaviour:
   m_CoachingUIParent: {fileID: 0}
   m_FadeMaterial: {fileID: 0}
   m_PassthroughToggle: {fileID: 0}
-  m_GoalPanelLazyFollow: {fileID: 0}
   m_TapTooltip: {fileID: 0}
   m_VideoPlayer: {fileID: 0}
   m_VideoPlayerToggle: {fileID: 0}

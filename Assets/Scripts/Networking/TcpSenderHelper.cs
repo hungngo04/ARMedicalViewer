@@ -2,6 +2,7 @@
 using System.IO;
 using UnityEngine;
 using System;
+using static TcpReceiverHelper;
 
 public class TcpSenderHelper
 {
@@ -22,7 +23,7 @@ public class TcpSenderHelper
         }
     }
 
-    public void SendAxialImage(Texture2D image)
+    public void SendImage(Texture2D image, ImageType type)
     {
         if (stream == null || !stream.CanWrite)
         {
@@ -32,16 +33,58 @@ public class TcpSenderHelper
 
         byte[] imageBytes = image.EncodeToPNG();
         byte[] imageSize = BitConverter.GetBytes(imageBytes.Length);
+        byte[] typeBytes = BitConverter.GetBytes((int)type);
 
         try
         {
-            stream.Write(imageSize, 0, imageSize.Length); // Send size first
-            stream.Write(imageBytes, 0, imageBytes.Length); // Send image bytes
-            Debug.Log("Axial image sent.");
+            // Send the type
+            stream.Write(typeBytes, 0, typeBytes.Length);
+
+            // Send the size 
+            stream.Write(imageSize, 0, imageSize.Length);
+
+            // Send the image data
+            stream.Write(imageBytes, 0, imageBytes.Length);
+
+            Debug.Log($"{type} image sent.");
         }
         catch (Exception ex)
         {
-            Debug.LogError($"Error sending image: {ex.Message}");
+            Debug.LogError($"Error sending {type} image: {ex.Message}");
+        }
+    }
+
+    public void SendPatientInformation(string patientId, string patientName)
+    {
+        if (stream == null || !stream.CanWrite)
+        {
+            Debug.LogError("Stream is not available for writing.");
+            return;
+        }
+
+        try
+        {
+            PatientInfo patientInfo = new PatientInfo { id = patientId, name = patientName };
+            string json = JsonUtility.ToJson(patientInfo);
+            byte[] jsonBytes = System.Text.Encoding.UTF8.GetBytes(json);
+            byte[] jsonSize = BitConverter.GetBytes(jsonBytes.Length);
+
+            // Write the type
+            int messageType = (int)MessageType.PatientInfo;
+            byte[] typeBytes = BitConverter.GetBytes(messageType);
+            stream.Write(typeBytes, 0, typeBytes.Length);
+
+            // Write the size
+            stream.Write(jsonSize, 0, jsonSize.Length);
+
+            // Write the patient info
+            stream.Write(jsonBytes, 0, jsonBytes.Length);
+
+            Debug.Log($"Patient information sent. Name: {patientName}");
+        }
+        catch (Exception ex)
+        {
+            Debug.LogError($"Error sending patient information: {ex.Message}");
         }
     }
 

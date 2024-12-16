@@ -1,19 +1,36 @@
 ﻿using System;
 using System.Net;
 using System.Net.Sockets;
+using System.Text;
 using System.Threading;
 using System.Collections.Concurrent;
 using UnityEngine;
 using UnityEngine.Rendering;
+using TMPro;
 
 public class TcpReceiverHelper : MonoBehaviour
 {
+    public enum MessageType
+    {
+        Axial = 1,
+        Sagittal = 2,
+        Coronal = 3,
+        PatientInfo = 4
+    }
+
     private TcpListener server;
-    public GameObject quad;
+    public GameObject axialQuad;
+    public GameObject sagittalQuad;
+    public GameObject coronalQuad;
+    public GameObject patientIdText;
+    public GameObject patientNameText;
     public int listeningPort = 50001;
 
-    // Store and render in main thread
-    private ConcurrentQueue<byte[]> receivedImages = new ConcurrentQueue<byte[]>();
+    public AudioSource dataReceivedAudioSource;
+    public AudioClip dataReceivedClip;
+
+    private ConcurrentQueue<(MessageType type, byte[] data)> receivedImages = new ConcurrentQueue<(MessageType, byte[])>();
+    private ConcurrentQueue<string> receivedPatientInfo = new ConcurrentQueue<string>();
 
     void Start()
     {
@@ -59,22 +76,48 @@ public class TcpReceiverHelper : MonoBehaviour
             NetworkStream stream = client.GetStream();
             Debug.Log("TcpReceiverHelper: OnClientConnected() - Client successfully connected.");
 
-            byte[] sizeBuffer = new byte[4];
-            stream.Read(sizeBuffer, 0, sizeBuffer.Length);
-            int imageSize = BitConverter.ToInt32(sizeBuffer, 0);
-            Debug.Log($"TcpReceiverHelper: OnClientConnected() - Image size received: {imageSize} bytes.");
-
-            byte[] imageBuffer = new byte[imageSize];
-            int totalBytesRead = 0;
-            while (totalBytesRead < imageSize)
+            while (stream.CanRead)
             {
-                int bytesRead = stream.Read(imageBuffer, totalBytesRead, imageSize - totalBytesRead);
-                if (bytesRead == 0) break;
-                totalBytesRead += bytesRead;
-                Debug.Log($"TcpReceiverHelper: OnClientConnected() - Read {bytesRead} bytes, Total: {totalBytesRead}/{imageSize}.");
-            }
+                byte[] typeBuffer = new byte[4];
+                int typeBytesRead = stream.Read(typeBuffer, 0, typeBuffer.Length);
+                if (typeBytesRead == 0)
+                {
+                    break;
+                }
 
-            receivedImages.Enqueue(imageBuffer);
+                int messageTypeInt = BitConverter.ToInt32(typeBuffer, 0);
+                MessageType messageType = (MessageType)messageTypeInt;
+                Debug.Log($"TcpReceiverHelper: OnClientConnected() - Message type received: {messageType}");
+
+                // Message size
+                byte[] sizeBuffer = new byte[4];
+                if (stream.Read(sizeBuffer, 0, sizeBuffer.Length) == 0) break;
+                int messageSize = BitConverter.ToInt32(sizeBuffer, 0);
+                Debug.Log($"TcpReceiverHelper: OnClientConnected() - Message size received: {messageSize} bytes.");
+
+                // Message data
+                byte[] messageBuffer = new byte[messageSize];
+                int totalBytesRead = 0;
+                while (totalBytesRead < messageSize)
+                {
+                    int bytesRead = stream.Read(messageBuffer, totalBytesRead, messageSize - totalBytesRead);
+                    if (bytesRead == 0) break;
+                    totalBytesRead += bytesRead;
+                    Debug.Log($"TcpReceiverHelper: OnClientConnected() - Read {bytesRead} bytes, Total: {totalBytesRead}/{messageSize}.");
+                }
+
+                if (messageType == MessageType.PatientInfo)
+                {
+                    Debug.Log("TcpReceiverHelper: OnClientConnected() - Received patient information.");
+                    string patientInfo = Encoding.UTF8.GetString(messageBuffer);
+                    receivedPatientInfo.Enqueue(patientInfo);
+                }
+                else
+                {
+                    Debug.Log($"TcpReceiverHelper: OnClientConnected() - Received {messageType} image data.");
+                    receivedImages.Enqueue((messageType, messageBuffer));
+                }
+            }
         }
         catch (SocketException se)
         {
@@ -93,47 +136,99 @@ public class TcpReceiverHelper : MonoBehaviour
 
     void Update()
     {
-        if (receivedImages.TryDequeue(out byte[] imageData))
+        // Process received images
+        while (receivedImages.TryDequeue(out (MessageType type, byte[] data) imageInfo))
         {
             Texture2D receivedTexture = new Texture2D(2, 2);
-            if (receivedTexture.LoadImage(imageData))
+            if (receivedTexture.LoadImage(imageInfo.data))
             {
-                Debug.Log("TcpReceiverHelper: Update() - Image successfully loaded into texture.");
-                RenderReceivedImage(receivedTexture);
+                Debug.Log($"TcpReceiverHelper: Update() - {imageInfo.type} image successfully loaded into texture.");
+                RenderReceivedImage(receivedTexture, imageInfo.type);
             }
             else
             {
-                Debug.LogError("TcpReceiverHelper: Update() - Failed to load image data into texture.");
+                Debug.LogError($"TcpReceiverHelper: Update() - Failed to load {imageInfo.type} image data into texture.");
             }
+        }
+
+        // Process received patient information
+        if (receivedPatientInfo.TryDequeue(out string patientInfo))
+        {
+            Debug.Log($"TcpReceiverHelper: Update() - Received Patient Info: {patientInfo}");
+            DisplayPatientInformation(patientInfo);
+
+            PlayDataReceivedSound();
         }
     }
 
-    private void RenderReceivedImage(Texture2D receivedTexture)
+    private void RenderReceivedImage(Texture2D receivedTexture, MessageType type)
     {
         try
         {
-            Debug.Log("TcpReceiverHelper: RenderReceivedImage() - Rendering received image.");
-            if (quad != null && receivedTexture != null)
+            Debug.Log($"TcpReceiverHelper: RenderReceivedImage() - Rendering received {type} image.");
+
+            GameObject targetQuad = null;
+            switch (type)
             {
-                var renderer = quad.GetComponent<Renderer>();
-                if (renderer != null)
-                {
-                    renderer.material.mainTexture = receivedTexture;
-                    Debug.Log("TcpReceiverHelper: RenderReceivedImage() - Image rendered on 3D quad.");
-                }
-                else
-                {
-                    Debug.LogError("TcpReceiverHelper: RenderReceivedImage() - No Renderer found on the assigned quad.");
-                }
+                case MessageType.Axial:
+                    targetQuad = axialQuad;
+                    break;
+                case MessageType.Sagittal:
+                    targetQuad = sagittalQuad;
+                    break;
+                case MessageType.Coronal:
+                    targetQuad = coronalQuad;
+                    break;
             }
-            else
+
+            if (targetQuad == null)
             {
-                Debug.LogError("TcpReceiverHelper: RenderReceivedImage() - Quad or received texture is null.");
+                Debug.LogError("TcpReceiverHelper: RenderReceivedImage() - No target quad assigned for this image type.");
+                return;
             }
+
+            if (receivedTexture == null)
+            {
+                Debug.LogError("TcpReceiverHelper: RenderReceivedImage() - Received texture is null.");
+                return;
+            }
+
+            var renderer = targetQuad.GetComponent<Renderer>();
+            if (renderer == null)
+            {
+                Debug.LogError("TcpReceiverHelper: RenderReceivedImage() - No Renderer found on the assigned quad.");
+                return;
+            }
+
+            renderer.material.mainTexture = receivedTexture;
+            Debug.Log("TcpReceiverHelper: RenderReceivedImage() - Image rendered on the designated quad.");
         }
         catch (Exception ex)
         {
             Debug.LogError($"TcpReceiverHelper: RenderReceivedImage() - Exception occurred: {ex.Message}");
+        }
+    }
+
+    private void DisplayPatientInformation(string patientInfo)
+    {
+        Debug.Log($"Received Patient Info: {patientInfo}");
+        PatientInfo info = JsonUtility.FromJson<PatientInfo>(patientInfo);
+        Debug.Log($"Patient ID: {info.id}, Patient Name: {info.name}");
+
+        patientIdText.GetComponent<TextMeshProUGUI>().text = info.id;
+        patientNameText.GetComponent<TextMeshProUGUI>().text = info.name;
+    }
+
+    private void PlayDataReceivedSound()
+    {
+        if (dataReceivedAudioSource != null && dataReceivedClip != null)
+        {
+            dataReceivedAudioSource.PlayOneShot(dataReceivedClip);
+            Debug.Log("TCPReceiverHelper: Data received - Sound played.");
+        }
+        else
+        {
+            Debug.LogWarning("TcpReceiverHelper: PlayDataReceivedSound() - AudioSource or AudioClip not assigned.");
         }
     }
 

@@ -14,8 +14,6 @@ public class RenderManager2D : MonoBehaviour
     public GameObject sagittalQuad;
     public GameObject coronalQuad;
 
-    private int minSliceNum = 0;
-    private int maxSliceNum = 0;
     private string dicomFolderPath;
 
     // Start is called before the first frame update

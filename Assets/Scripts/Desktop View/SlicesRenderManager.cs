@@ -30,6 +30,7 @@ public class SlicesRenderManager : MonoBehaviour
 
     private string[] dicomSlicesList;
     private bool patientInfoLoaded = false;
+    private bool patientInfoSent = false;
 
     private Texture3D volumeTexture;
     private Color32[] volumePixelData;
@@ -68,11 +69,28 @@ public class SlicesRenderManager : MonoBehaviour
             string ip = ipAddressInput.text;
             Debug.Log($"IP: {ip}");
             tcpSender.ConnectToClient(ip, 50001);
-            int currentSlice = (int)sliceSlider.value;
 
-            // Send the currently displayed axial image
-            var texture = axialImage.texture as Texture2D;
-            tcpSender.SendAxialImage(texture);
+            // Send axial
+            var axialTexture = axialImage.texture as Texture2D;
+            tcpSender.SendImage(axialTexture, ImageType.Axial);
+
+            // Send sagittal
+            var sagittalTexture = sagittalImage.texture as Texture2D;
+            tcpSender.SendImage(sagittalTexture, ImageType.Sagittal);
+
+            // Send coronal
+            var coronalTexture = coronalImage.texture as Texture2D;
+            tcpSender.SendImage(coronalTexture, ImageType.Coronal);
+
+            // Send patient information
+            if (!patientInfoSent)
+            {
+                var patientId = patientIdText.text;
+                var patientName = patientNameText.text;
+                tcpSender.SendPatientInformation(patientId, patientName);
+                patientInfoSent = true;
+            }
+
             tcpSender.Disconnect();
         });
 
